@@ -22,7 +22,7 @@ services:
   - type: web
     name: withdrawal-api
     plan: free # Use a paid plan for production
-    env: node
+    runtime: node
     buildCommand: "npm install && npx prisma generate"
     startCommand: "npx prisma migrate deploy && npm start"
     healthCheckPath: /api/v2/withdrawal/health
@@ -47,7 +47,7 @@ services:
   - type: worker
     name: withdrawal-worker
     plan: free # Use a paid plan for production
-    env: node
+    runtime: node
     buildCommand: "npm install && npx prisma generate"
     startCommand: "npm run worker"
     envVars:
