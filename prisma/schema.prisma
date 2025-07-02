@@ -1,0 +1,51 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql" // Or "mysql", "sqlite", etc.
+  url      = env("DATABASE_URL")
+}
+
+model WithdrawalRequest {
+  id                        String    @id @default(cuid())
+  requestId                 String    @unique @map("request_id")
+  status                    String    @default("PENDING_SIGNATURE")
+  treasuryContractAddress   String    @map("treasury_contract_address")
+  destinationAddress        String    @map("destination_address")
+  tokenContractAddress      String    @map("token_contract_address")
+  amount                    String
+  partiallySignedTx         String    @map("partially_signed_tx")
+  txHash                    String?   @map("tx_hash")
+  errorMessage              String?   @map("error_message")
+  createdAt                 DateTime  @default(now()) @map("created_at")
+  updatedAt                 DateTime  @updatedAt @map("updated_at")
+
+  history HistoryEntry[]
+
+  @@map("withdrawal_requests")
+}
+
+model HistoryEntry {
+  id                String   @id @default(cuid())
+  requestId         String
+  request           WithdrawalRequest @relation(fields: [requestId], references: [id])
+  status            String
+  timestamp         DateTime @default(now())
+}
+
+model RawTransactionBroadcast {
+  id           String    @id @default(cuid())
+  clientId     String?   @map("client_id") // To identify the client/API key used
+  rawTx        String    @db.Text @map("raw_tx")
+  txHash       String?   @unique @map("tx_hash")
+  status       String    @default("PENDING") // PENDING, BROADCASTED, CONFIRMED, FAILED
+  errorMessage String?   @map("error_message")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  @@map("raw_transaction_broadcasts")
+}

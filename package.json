@@ -1,0 +1,27 @@
+{
+  "name": "withdrawal-activation-service",
+  "version": "1.0.0",
+  "description": "A service to activate and broadcast crypto withdrawals.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "worker": "node worker.js",
+    "prisma:generate": "npx prisma generate",
+    "prisma:migrate": "npx prisma migrate dev",
+    "prisma:deploy": "npx prisma migrate deploy"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.0.0",
+    "bullmq": "^4.0.0",
+    "dotenv": "^16.3.1",
+    "ethers": "^6.7.1",
+    "express": "^4.18.2",
+    "express-validator": "^7.0.1"
+  },
+  "devDependencies": {
+    "prisma": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

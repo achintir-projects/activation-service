@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Withdrawal Activation Dashboard</title>
+    <style>
+        body { font-family: sans-serif; margin: 2em; background-color: #f4f6f8; }
+        h1, h2 { color: #333; }
+        table { width: 100%; border-collapse: collapse; margin-top: 1em; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #e9ecef; }
+        .status { font-weight: bold; }
+        .status-processing { color: #17a2b8; }
+        .status-pending { color: #ffc107; }
+        .status-confirmed { color: #28a745; }
+        .status-failed { color: #dc3545; }
+        .status-cancelled { color: #6c757d; }
+    </style>
+</head>
+<body>
+
+    <h1>Withdrawal Activation Dashboard</h1>
+
+    <h2>Pending Requests</h2>
+    <table id="pending-table">
+        <thead>
+            <tr>
+                <th>Request ID</th>
+                <th>Destination Address</th>
+                <th>Amount (USDT)</th>
+                <th>Status</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody id="pending-requests-body"></tbody>
+    </table>
+
+    <h2>Completed Requests (Last 24h)</h2>
+    <table id="completed-table">
+        <thead>
+            <tr>
+                <th>Request ID</th>
+                <th>Destination Address</th>
+                <th>Amount (USDT)</th>
+                <th>Status</th>
+                <th>Transaction Hash</th>
+            </tr>
+        </thead>
+        <tbody id="completed-requests-body"></tbody>
+    </table>
+
+    <div id="pagination-controls" style="margin-top: 1em; text-align: center;"></div>
+
+    <script>
+        const pendingTableBody = document.getElementById('pending-requests-body');
+        const completedTableBody = document.getElementById('completed-requests-body');
+        const API_BASE_URL = '/api/v2/withdrawal'; // Assumes dashboard is served from the same origin as the API
+        let currentPage = 1;
+        let totalPages = 1;
+
+        function getStatusClass(status) {
+            switch (status) {
+                case 'PENDING_SIGNATURE': return 'status-pending';
+                case 'PROCESSING': return 'status-processing';
+                case 'COMPLETED': return 'status-confirmed';
+                case 'CANCELLED': return 'status-cancelled';
+                case 'FAILED': return 'status-failed';
+                default: return '';
+            }
+        }
+
+        async function cancelRequest(requestId) {
+            if (!confirm(`Are you sure you want to cancel request ${requestId}?`)) {
+                return;
+            }
+            try {
+                const response = await fetch(`${API_BASE_URL}/cancel`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ request_id: requestId })
+                });
+                const result = await response.json();
+                if (!response.ok) {
+                    throw new Error(result.error || 'Failed to cancel request');
+                }
+                alert('Request cancelled successfully.');
+                fetchAndRenderRequests(); // Refresh the view immediately
+            } catch (error) {
+                console.error("Cancellation failed:", error);
+                alert(`Error: ${error.message}`);
+            }
+        }
+
+        async function fetchAndRenderRequests(page = 1) {
+            currentPage = page;
+            try {
+                const response = await fetch(`${API_BASE_URL}/list?page=${page}&pageSize=10`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const result = await response.json();
+                const requests = result.data;
+                totalPages = result.pagination.totalPages;
+
+                // Clear existing rows
+                pendingTableBody.innerHTML = '';
+                completedTableBody.innerHTML = '';
+
+                requests.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+                requests.forEach(req => {
+                    const row = document.createElement('tr');
+                    const statusClass = getStatusClass(req.status);
+                    const shortAddress = `${req.destination_address.substring(0, 6)}...${req.destination_address.slice(-4)}`;
+
+                    if (['PENDING_SIGNATURE', 'PROCESSING'].includes(req.status)) {
+                        const actionCell = req.status === 'PENDING_SIGNATURE'
+                            ? `<button onclick="cancelRequest('${req.request_id}')">Cancel</button>`
+                            : 'In Progress';
+
+                        row.innerHTML = `
+                            <td>${req.request_id}</td>
+                            <td>${shortAddress}</td>
+                            <td>${req.amount}</td>
+                            <td class="status ${statusClass}">${req.status}</td>
+                            <td>${actionCell}</td>
+                        `;
+                        pendingTableBody.appendChild(row);
+                    } else {
+                        const shortTxHash = req.txHash
+                            ? `<a href="#" title="${req.txHash}">${req.txHash.substring(0, 6)}...${req.txHash.slice(-4)}</a>`
+                            : 'N/A';
+
+                        row.innerHTML = `
+                            <td>${req.request_id}</td>
+                            <td>${shortAddress}</td>
+                            <td>${req.amount}</td>
+                            <td class="status ${statusClass}">${req.status}</td>
+                            <td>${shortTxHash}</td>
+                        `;
+                        completedTableBody.appendChild(row);
+                    }
+                });
+
+                renderPagination();
+            } catch (error) {
+                console.error("Failed to fetch requests:", error);
+                const row = document.createElement('tr');
+                row.innerHTML = `<td colspan="5" style="text-align:center;color:red;">Failed to load data. Check console for details.</td>`;
+                pendingTableBody.innerHTML = '';
+                pendingTableBody.appendChild(row);
+            }
+        }
+
+        function renderPagination() {
+            const controls = document.getElementById('pagination-controls');
+            controls.innerHTML = '';
+
+            const prevButton = document.createElement('button');
+            prevButton.innerText = 'Previous';
+            prevButton.disabled = currentPage <= 1;
+            prevButton.onclick = () => fetchAndRenderRequests(currentPage - 1);
+            controls.appendChild(prevButton);
+
+            const pageInfo = document.createElement('span');
+            pageInfo.innerText = ` Page ${currentPage} of ${totalPages} `;
+            pageInfo.style.margin = '0 1em';
+            controls.appendChild(pageInfo);
+
+            const nextButton = document.createElement('button');
+            nextButton.innerText = 'Next';
+            nextButton.disabled = currentPage >= totalPages;
+            nextButton.onclick = () => fetchAndRenderRequests(currentPage + 1);
+            controls.appendChild(nextButton);
+        }
+
+        // Initial load and periodic refresh to keep the dashboard live
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchAndRenderRequests(currentPage);
+            // Refresh the current page every 5 seconds
+            setInterval(() => fetchAndRenderRequests(currentPage), 5000);
+        });
+    </script>
+</body>
+</html>

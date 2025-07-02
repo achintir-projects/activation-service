@@ -1,0 +1,78 @@
+# This file configures the infrastructure for the Withdrawal Activation Service on Render.
+# It defines four services: a database, a queue, a web API, and a background worker.
+
+services:
+  # 1. PostgreSQL Database
+  - type: pserv
+    name: crypto-db
+    plan: free # Use a paid plan for production to prevent sleeping
+    postgres:
+      version: 14
+    disk:
+      sizeGB: 1
+
+  # 2. Redis Instance for BullMQ
+  - type: pserv
+    name: crypto-queue
+    plan: free # Use a paid plan for production
+    redis:
+      version: 7
+
+  # 3. The API Web Service
+  - type: web
+    name: withdrawal-api
+    plan: free # Use a paid plan for production
+    env: node
+    rootDir: ./withdrawal-activation-service # <-- IMPORTANT: Set the project root
+    buildCommand: "npm install && npx prisma generate"
+    startCommand: "npx prisma migrate deploy && npm start"
+    healthCheckPath: /api/v2/withdrawal/health
+    envVars:
+      - key: NODE_VERSION
+        value: 18
+      - key: DATABASE_URL
+        fromService:
+          type: pserv
+          name: crypto-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: pserv
+          name: crypto-queue
+          property: connectionString
+      - key: ETHEREUM_NETWORK
+        value: sepolia # IMPORTANT: Change to 'mainnet' for production
+      - fromGroup: service-secrets # Group for non-public variables
+
+  # 4. The Background Worker
+  - type: worker
+    name: withdrawal-worker
+    plan: free # Use a paid plan for production
+    env: node
+    rootDir: ./withdrawal-activation-service # <-- IMPORTANT: Set the project root
+    buildCommand: "npm install && npx prisma generate"
+    startCommand: "npm run worker"
+    envVars:
+      - key: NODE_VERSION
+        value: 18
+      - key: DATABASE_URL
+        fromService:
+          type: pserv
+          name: crypto-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: pserv
+          name: crypto-queue
+          property: connectionString
+      - key: ETHEREUM_NETWORK
+        value: sepolia # IMPORTANT: Change to 'mainnet' for production
+      - fromGroup: service-secrets # Group for non-public variables
+
+# Environment Group for secrets to keep them in one place
+envVarGroups:
+  - name: service-secrets
+    envVars:
+      - key: SERVICE_WALLET_PRIVATE_KEY
+      - key: MAINNET_RPC_URL
+      - key: SEPOLIA_RPC_URL
